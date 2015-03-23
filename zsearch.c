@@ -42,8 +42,17 @@ int init(int argc, char *argv[]){
     return 1;
 }
 
+void printUsage(char *sProg){
+	    printf("%s -i filePath\n",sProg);
+}
+
+SysParam sys;
 
 int main(int argc, char **argv){
-
+	initSysParam(&sys);	
+	if(init(argc,argv) != 1){ 
+		printUsage(argv[0]);
+		return -1; 
+	}
 
 }

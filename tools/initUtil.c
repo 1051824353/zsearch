@@ -11,4 +11,5 @@ void initSysParam(SysParam * sp){
 	memset(sp->filePath,0,512);
 	memset(sp->fileIndexPath,0,512);
 	memset(sp->fileDataPath,0,512);
+	memset(sp->grepChar,0,512);
 }

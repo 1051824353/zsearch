@@ -11,6 +11,9 @@ struct _SYS_PARAM{
 	char filePath[512];
 	char fileIndexPath[512];
 	char fileDataPath[512];
+	char grepChar[512];
 };
 
+#define CREATE_INDEX 0
+#define FIND_DATA 1
 #endif

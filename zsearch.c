@@ -6,6 +6,7 @@
 #include "sysHeader.h"
 #include "initUtil.h"
 #include "linkUtil.h"
+#include "treeUtil.h"
 
 SysParam sys;
 
@@ -92,6 +93,7 @@ int main(int argc, char **argv){
 	}
 	chdir(sys.rootPath);
 	
+	int count = 0;	
 	if(sys.opt == CREATE_INDEX){
 		FILE * origFile = fopen(sys.filePath,"r");
 		if(!origFile){
@@ -108,21 +110,35 @@ int main(int argc, char **argv){
 			fclose(dataFile);
 			printf("open file [%s] err \n",sys.fileDataPath);
 		}
-		LinkList *list = NULL;
+		TreeList *list = NULL;
 		char sline[40960];
+		count = 0;
 		while(fgets(sline,SIZEOF_1(sline),origFile) != 0){
 			trimCrlf(sline);
-			insertSortLinkList(&list,sline);		
+			insertSortTreeList(&list,sline);
+			++count;
+			if(count % 10000 == 0){
+				printf("get str num[%d]\n",count);
+			}
 		}
 		int dataSeekIndex = 0;
-		int listCount = getLinkListCount(list);
+		int listCount = getTreeListCount(list);
 		
+		printf("out list count[%d]\n",listCount);
 		if(fwrite(&listCount, sizeof(int), 1, indexFile)!=1){
 			printf("write file [%s] err \n",sys.fileIndexPath);
 		}
+		TreeNode * e =NULL;
+		TreeNode * be =NULL;
+		char * str = NULL;
 		for(int i = 0 ; i < listCount ; i ++){
 			dataSeekIndex = ftell(dataFile) ;
-			char * str = getLinkListVal(list,i);
+			be = e;
+			e = getNextTreeNode(list,e);
+			str = e->data;
+			if(i % 10000 == 0){
+				printf("out str num[%d]\n",i);
+			}
 			if(fwrite(str, strlen(str), 1, dataFile)!=1){
 				printf("write file [%s] err \n",sys.fileDataPath);
 				break;	
@@ -149,20 +165,26 @@ int main(int argc, char **argv){
 			printf("open file [%s] err \n",sys.fileDataPath);
 			return -1;
 		}
-		char indexLine[40960];
-		if(fgets(indexLine,40960,indexFile) == 0){
-			printf("read file [%s] err \n",sys.fileIndexPath);
-			return -1;
-		}
-		int count = (int)indexLine[0];	
+		count = 0;
+		int * indexLine = NULL;
+		readMemFile((char **)&indexLine,indexFile);
+		fclose(indexFile);
+		count = indexLine[0];
 		printf("read file count [%d] \n",count);
 		
 		int idxCount = count;
 		int index = idxCount / 2 +1;
+		char val[256];
+		int dataIndex1 = 0,dataIndex2 = 0;
+		int grepCmp = 0;
+		
+		int oldIndex = 0;
 		while(idxCount-- > 0 && index <= count && index >=1){
+			dataIndex1 = indexLine[index];
+			dataIndex2 = indexLine[index+1];
+			
+			//memcpy(&dataIndex2,indexLine + (index * 4 + 4),sizeof(int));
 
-			int dataIndex1 = indexLine[index * 4];
-			int dataIndex2 = indexLine[index * 4 + 4];
 
 			if (fseek(dataFile,dataIndex1,SEEK_SET) != 0){ 
 				if (ferror(dataFile)){
@@ -170,7 +192,6 @@ int main(int argc, char **argv){
 					return -1;
 				}   
 			}
-			char val[256];
 			memset(val,0,256);
 			int getStrLen = dataIndex2 - dataIndex1 + 1;
 			if(getStrLen < 0 ){
@@ -180,16 +201,30 @@ int main(int argc, char **argv){
 				printf("read file [%s] err \n",val);
 			}
 			int grepCharLen = strlen(sys.grepChar);
-			int grepCmp = strncasecmp(val,sys.grepChar,grepCharLen);
+			grepCmp = strncasecmp(val,sys.grepChar,grepCharLen);
 			if(grepCmp == 0){
 				printf("get string [%s] \n",val);
 				return 1;
-			}else if(grepCmp  > 0){
-				index = (count - index) / 2;
-			}else if(grepCmp < 0){
-				index = (count - index) /2 + index + 1;
 			}
+			int diffIndex = abs(oldIndex-index);
+			if(diffIndex > 100){
+				oldIndex = index;
+				if(grepCmp  > 0){
+					index -= diffIndex /2;
+				}else if(grepCmp < 0){
+					index += diffIndex /2;
+				}
+			}else{
+				if(grepCmp  > 0){
+					index--;
+				}else if(grepCmp < 0){
+					index++;
+				}
+			}
+
 		}
+		FREE_OBJ(indexLine);
+		fclose(dataFile);
 	}
 }
 

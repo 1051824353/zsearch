@@ -4,6 +4,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <math.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
 
 int mkdir_ext(char *sPath,int mode,int nIsPath)
 {
@@ -574,6 +576,53 @@ int readStrFile(char **content,FILE * f){
 	}   
 	return Len;	
 }
+int readMemFile(char **content,FILE * f){
+	int file_len = 0;
+	struct stat file_stat;
+	int fno = 0;
+	fno = fileno(f);
+	if(fstat(fno,&file_stat)==-1){
+		return -1;
+	}
+	file_len = file_stat.st_size;
+	char * tcontent = (char *)mmap(NULL,file_len,PROT_READ,MAP_SHARED,fno,SEEK_SET);
+	
+	int malSumSize = 0;
+	int malPerSize = 4096;
+	int chaMemSize = 0;
+	int fileLeave = file_len;
+	while(file_len >= malSumSize){	
+		if(fileLeave <= malPerSize){
+			chaMemSize = malPerSize - fileLeave;
+		}else{
+			chaMemSize = malPerSize;
+		}
+		if (*content==NULL){ 
+			*content = (char *)MALLOC_OBJ(chaMemSize);
+		}else{
+			*content = (char *)REALLOC_OBJ(*content,malSumSize + chaMemSize);
+		}
+		memcpy(*content + malSumSize,tcontent + malSumSize,chaMemSize);
+		malSumSize += chaMemSize;
+		fileLeave -= chaMemSize;
+	}
+
+	/*int L = 40960;
+	char sLine[40960];
+	int Len = 0;
+	memset(sLine,0,40960);
+	while (fgets(sLine,40960,f)!=0){
+		if (*content==NULL){ 
+			*content = (char *)MALLOC_OBJ(L);
+		}else{
+			*content = (char *)REALLOC_OBJ(*content,Len+L);
+		}   
+		memcpy(*content+Len,sLine,L);
+		Len+=L;
+		memset(sLine,0,40960);
+	}   
+	return Len;	*/
+}
 int readByteFile(char **content,int *conLen,FILE * f){
 	char sLine[40960];
 	int Len = 0;
@@ -798,4 +847,15 @@ unsigned long get_file_size(const char *path){
 	}  
 	return filesize;  
 }
+int zstrcasecmp(char * str1,char *str2){
+	int l1 = strlen(str1);
+	int l2 = strlen(str2);
+	if(l1 > l2){
+		return 1;
+	}else if(l1 < l2){
+		return -1;
+	}else{
+		return strcasecmp(str1,str2);	
+	}
 
+}

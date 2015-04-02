@@ -7,6 +7,12 @@
 #include "initUtil.h"
 #include "linkUtil.h"
 #include "treeUtil.h"
+#include "hashUtil.h"
+
+#include<iostream>
+#include <set>
+#include <string>
+using namespace std;
 
 SysParam sys;
 
@@ -84,6 +90,11 @@ void printUsage(char *sProg){
 	    printf("%s\n-i -f filePath : create index\n-g -f filePath : find file\n",sProg);
 }
 
+struct strLess{
+	bool operator()(string s1,string s2) const{
+		return s1.compare(s2) < 0;
+	}
+};
 
 int main(int argc, char **argv){
 	initSysParam(&sys);	
@@ -92,7 +103,6 @@ int main(int argc, char **argv){
 		return -1; 
 	}
 	chdir(sys.rootPath);
-	
 	int count = 0;	
 	if(sys.opt == CREATE_INDEX){
 		FILE * origFile = fopen(sys.filePath,"r");
@@ -110,43 +120,43 @@ int main(int argc, char **argv){
 			fclose(dataFile);
 			printf("open file [%s] err \n",sys.fileDataPath);
 		}
-		TreeList *list = NULL;
+		set<string,strLess> list;
 		char sline[40960];
 		count = 0;
 		while(fgets(sline,SIZEOF_1(sline),origFile) != 0){
 			trimCrlf(sline);
-			insertSortTreeList(&list,sline);
+			string str = string(sline);
+			list.insert(str);
 			++count;
 			if(count % 10000 == 0){
 				printf("get str num[%d]\n",count);
 			}
 		}
-		int dataSeekIndex = 0;
-		int listCount = getTreeListCount(list);
-		
-		printf("out list count[%d]\n",listCount);
-		if(fwrite(&listCount, sizeof(int), 1, indexFile)!=1){
+		int count = list.size();
+		if(fwrite(&count, sizeof(int), 1, indexFile)!=1){
 			printf("write file [%s] err \n",sys.fileIndexPath);
 		}
-		TreeNode * e =NULL;
-		TreeNode * be =NULL;
-		char * str = NULL;
-		for(int i = 0 ; i < listCount ; i ++){
-			dataSeekIndex = ftell(dataFile) ;
-			be = e;
-			e = getNextTreeNode(list,e);
-			str = e->data;
-			if(i % 10000 == 0){
-				printf("out str num[%d]\n",i);
-			}
-			if(fwrite(str, strlen(str), 1, dataFile)!=1){
+		printf("out count[%d]\n",count);
+		
+		count = 0;
+
+		int dataSeekIndex = 0;
+		set<string,strLess>::iterator it;
+		for(it=list.begin();it!=list.end();it++){
+			string tmpstr = *it;
+			const char * tmpchar = tmpstr.c_str();
+			if(fwrite(tmpchar, strlen(tmpchar), 1, dataFile)!=1){
 				printf("write file [%s] err \n",sys.fileDataPath);
 				break;	
 			}
-
+			dataSeekIndex = ftell(dataFile) ;
 			if(fwrite(&dataSeekIndex, sizeof(int), 1, indexFile)!=1){
 				printf("write file [%s] err \n",sys.fileIndexPath);
 				break;	
+			}
+			++count;
+			if(count % 10000 == 0){
+				printf("out str num[%d]\n",count);
 			}
 		}
 		fclose(origFile);
@@ -169,9 +179,13 @@ int main(int argc, char **argv){
 		int * indexLine = NULL;
 		readMemFile((char **)&indexLine,indexFile);
 		fclose(indexFile);
+
 		count = indexLine[0];
 		printf("read file count [%d] \n",count);
+	
 		
+
+
 		int idxCount = count;
 		int index = idxCount / 2 +1;
 		char val[256];
@@ -183,8 +197,6 @@ int main(int argc, char **argv){
 			dataIndex1 = indexLine[index];
 			dataIndex2 = indexLine[index+1];
 			
-			//memcpy(&dataIndex2,indexLine + (index * 4 + 4),sizeof(int));
-
 
 			if (fseek(dataFile,dataIndex1,SEEK_SET) != 0){ 
 				if (ferror(dataFile)){
